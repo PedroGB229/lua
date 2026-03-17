@@ -18,30 +18,6 @@ const tabela = new $('#tabela').DataTable({
     ajax: {
         url: '/produto/listproduto',
         type: 'POST'
-    },
-    columnDefs: [
-        {
-            targets: [4],
-            render: function (data, type, row) {
-                if (type === 'display') {
-                    return parseFloat(data).toLocaleString('pt-BR', {
-                        style: 'currency',
-                        currency: 'BRL'
-                    });
-                }
-                return data;
-            }
-        }
-    ]
-});
-
-// --- LÓGICA DE ATALHOS ---
-document.addEventListener('keydown', function (e) {
-    
-    // F2 - Ir para Cadastro
-    if (e.key === 'F2') {
-        e.preventDefault();
-        window.location.href = '/produto/cadastro';
     }
 });
 
@@ -68,4 +44,46 @@ async function Delete(id) {
     tabela.ajax.reload();
 }
 
+async function AjustarEstoque(id) {
+    try {
+        console.log(`Abrindo modal para ID: ${id}`);
+        document.getElementById('id').value = id;
+        document.getElementById('nova_quantidade').value = '';
+        document.getElementById('quantidade_atual').value = 'Carregando...';
+        const response = await Requests.SetForm('form').Post('/produto/selecionarestoque');
+
+        if (response && response.status) {
+            document.getElementById('quantidade_atual').value = response.estoque_atual;
+
+            $('#modalstock').modal('show');
+        } else {
+            console.error("Erro na resposta do servidor:", response);
+            Swal.fire("Erro", "Produto não encontrado ou sem saldo.", "error");
+        }
+    } catch (error) {
+        console.error("Erro ao abrir modal:", error);
+    }
+}
+
+async function NovaQuantidade() {
+    const response = await Requests.SetForm('form').Post('/produto/selecionarestoque');
+
+    if (response.status) {
+        Swal.fire({
+            title: "Sucesso!",
+            text: response.msg,
+            icon: "success",
+            timer: 2000
+        });
+
+        $('#modalstock').modal('hide');
+        tabela.ajax.reload();
+    } else {
+        Swal.fire("Erro", response.msg, "error");
+    }
+}
+
+// IMPORTANTE: Expor para o window porque o DataTables renderiza o HTML dinamicamente
+window.AjustarEstoque = AjustarEstoque;
+window.NovaQuantidade = NovaQuantidade;
 window.Delete = Delete;

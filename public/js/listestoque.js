@@ -21,7 +21,7 @@ const tabela = new $('#tabela').DataTable({
     },
     columnDefs: [
         {
-            targets: [4],
+            targets: [3],
             render: function (data, type, row) {
                 if (type === 'display') {
                     return parseFloat(data).toLocaleString('pt-BR', {

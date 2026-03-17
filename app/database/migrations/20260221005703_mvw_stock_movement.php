@@ -13,14 +13,17 @@ final class MvwStockMovement extends AbstractMigration
         CREATE MATERIALIZED VIEW mvw_estoque AS
                 SELECT 
                     id_produto,
-                    SUM(COALESCE(quantidade_entrada, 0)) AS total_entradas,
-                    SUM(COALESCE(quantidade_saida, 0)) AS total_saidas,
-                    (SUM(COALESCE(quantidade_entrada, 0)) - SUM(COALESCE(quantidade_saida, 0))) AS estoque_atual,
+                    product.nome,
+                    SUM(COALESCE(stock_movement.quantidade_entrada, 0)) AS total_entradas,
+                    SUM(COALESCE(stock_movement.quantidade_saida, 0)) AS total_saidas,
+                    (SUM(COALESCE(stock_movement.quantidade_entrada, 0)) - SUM(COALESCE(stock_movement.quantidade_saida, 0))) AS estoque_atual,
                         MAX(data_cadastro) AS ultima_movimentacao
                             FROM 
                                 stock_movement
+                            LEFT JOIN product ON product.id = stock_movement.id_produto
+                            WHERE product.excluido != true
                             GROUP BY 
-                                id_produto;
+                                stock_movement.id_produto,product.nome;
         ");
 
         $this->execute("
