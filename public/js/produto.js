@@ -4,6 +4,24 @@ const Salvar = document.getElementById('salvar');
 const Action = document.getElementById('acao');
 
 async function insert() {
+    //Valida todos os campos do formulário
+    /*const IsValid = Validate
+        .SetForm('form')//Inform o ID do form
+        .Validate();//Aplica a validação no campos 
+    if (!IsValid) {
+        Swal.fire({
+            icon: "error",
+            title: "Por favor preencha corretamente os campos!",
+            showConfirmButton: false,
+            timer: 3000,
+            timerProgressBar: true,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        //Em caso de erro encerramos o processo.
+        return;
+    }*/
     const response = await Requests.SetForm('form').Post('/produto/insert');
     if (!response.status) {
         Swal.fire({
@@ -21,7 +39,7 @@ async function insert() {
     document.getElementById('acao').value = 'e';
     //Setamos o valor do campos ID para que se necessário alterar o registro
     document.getElementById('id').value = response.id;
-
+    //Modifica a URL da aplicação sem recarregar
     history.pushState(`/produto/alterar/${response.id}`, '', `/produto/alterar/${response.id}`);
     Swal.fire({
         icon: "success",
@@ -35,6 +53,24 @@ async function insert() {
     });
 }
 async function update() {
+    /*//Valida todos os campos do formulário
+    const IsValid = Validate
+        .SetForm('form')//Inform o ID do form
+        .Validate();//Aplica a validação no campos 
+    if (!IsValid) {
+        Swal.fire({
+            icon: "error",
+            title: "Por favor preencha corretamente os campos!",
+            showConfirmButton: false,
+            timer: 3000,
+            timerProgressBar: true,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        //Em caso de erro encerramos o processo.
+        return;
+    }*/
     const response = await Requests.SetForm('form').Post('/produto/update');
     if (!response.status) {
         Swal.fire({
@@ -60,12 +96,6 @@ async function update() {
         }
     });
 }
-if (Salvar) {
-    Salvar.addEventListener('click', () => {
-        if (Action.value === 'c') {
-            insert();
-        } else {
-            update();
-        }
-    });
-}
+Salvar.addEventListener('click', async () => {
+    (Action.value === 'c') ? await insert() : await update();
+});

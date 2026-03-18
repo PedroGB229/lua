@@ -91,6 +91,7 @@ $app->group('/produto', function (RouteCollectorProxy $group) {
     $group->post('/delete', Produto::class . ':delete');
     $group->post('/listproductdata', Produto::class . ':listproductdata');
     $group->post('/selecionarestoque', Produto::class . ':selecionarestoque');
+    $group->post('/alterarestoque', Produto::class . ':alterarestoque');
 });
 $app->group('/pagamento', function (RouteCollectorProxy $group) {
     $group->get('/lista', PaymentTerms::class . ':lista');
@@ -104,6 +105,6 @@ $app->group('/pagamento', function (RouteCollectorProxy $group) {
 });
 $app->group('/ajusteestoque', function (RouteCollectorProxy $group) {
     $group->get('/lista', AdjustmentStock::class . ':lista');
-    $group->post('/cadastro', AdjustmentStock::class . ':cadastro');
+    $group->get('/cadastro', AdjustmentStock::class . ':cadastro');
     $group->post('/listajusteestoque', AdjustmentStock::class . ':listajusteestoque');
 });

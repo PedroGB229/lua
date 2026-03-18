@@ -3,6 +3,7 @@
 namespace app\controller;
 
 use app\database\builder\InsertQuery;
+use app\database\builder\DeleteQuery;
 use app\database\builder\SelectQuery;
 use app\database\builder\UpdateQuery;
 
@@ -38,25 +39,40 @@ class Produto extends Base
     {
         try {
             $form = $request->getParsedBody();
-
             $FieldAndValues = [
-                'nome'            => $form['nome'],
-                'codigo_barra'    => $form['codigo_barra'],
+                'nome' => $form['nome'],
+                'codigo_barra' => $form['codigo_barra'],
                 'descricao_curta' => $form['descricao_curta'],
-                'valor'           => (float)str_replace(['.', ','], ['', '.'], $form['valor'])
+                'valor' => (float) str_replace(',', '.', $form['valor'])
             ];
             $IsSave = InsertQuery::table('product')->save($FieldAndValues);
             if (!$IsSave) {
-                return $this->SendJson($response, ['status' => false, 'msg' => 'Erro ao salvar no banco.'], 403);
+                return $this->SendJson($response, ['status' => false, 'msg' => 'Restrição: ' . $IsSave, 'id' => 0], 403);
             }
+
+            // Inicializa estoque do produto registrado na movimentação de estoque
             $produto = SelectQuery::select('id')->from('product')->order('id', 'desc')->fetch();
-            return $this->SendJson($response, [
-                'status' => true,
-                'msg' => 'Produto salvo com sucesso!',
-                'id' => $produto['id']
-            ], 201);
+            $idProduto = $produto['id'];
+            $quantidadeInicial = isset($form['estoque_inicial']) ? (float) str_replace(',', '.', $form['estoque_inicial']) : 0;
+
+            if ($quantidadeInicial > 0) {
+                $stockMovementData = [
+                    'id_produto' => $idProduto,
+                    'quantidade_entrada' => $quantidadeInicial,
+                    'quantidade_saida' => 0,
+                    'tipo' => 'ENTRADA',
+                    'origem_movimento' => 'AJUSTE_MANUAL'
+                ];
+                $IsStockSave = InsertQuery::table('stock_movement')->save($stockMovementData);
+
+                if (!$IsStockSave) {
+                    return $this->SendJson($response, ['status' => false, 'msg' => 'Produto salvo, mas falha ao registrar estoque inicial', 'id' => $idProduto], 500);
+                }
+            }
+
+            return $this->SendJson($response, ['status' => true, 'msg' => 'Salvo com sucesso', 'id' => $idProduto], 201);
         } catch (\Exception $e) {
-            return $this->SendJson($response, ['status' => false, 'msg' => 'Erro: ' . $e->getMessage()], 500);
+            return $this->SendJson($response, ['status' => false, 'msg' => 'Restrição: ' . $e->getMessage(), 'id' => 0], 500);
         }
     }
     public function listproductdata($request, $response)
@@ -76,6 +92,7 @@ class Produto extends Base
                 'text' => $item['nome'] . ' - Cód. barra: ' . $item['codigo_barra']
             ];
         }
+        #$data['pagination'] = ['more' => true];
         return $this->SendJson($response, $data);
     }
     public function listproduto($request, $response)
@@ -93,18 +110,18 @@ class Produto extends Base
         $fields = [
             0 => 'id_produto',
             1 => 'nome',
-            2 => 'estoque_atual',
+            2 => 'estoque_atual'
         ];
         #Capturamos o nome do campo a ser odernado.
         $orderField = $fields[$order];
         #O termo pesquisado
         $term = $form['search']['value'];
-        $query = SelectQuery::select()->from('mvw_estoque');
+        $query = SelectQuery::select('p.id AS id_produto, p.nome, COALESCE(m.estoque_atual, 0) AS estoque_atual')
+            ->from('product p LEFT JOIN mvw_estoque m ON m.id_produto = p.id');
         if (!is_null($term) && ($term !== '')) {
             $query
-                ->where('id_produto', 'ilike', "%{$term}%")
-                ->where('nome', 'ilike', "%{$term}%", 'or')
-                ->where('estoque_atual', 'ilike', "%{$term}%", 'or');
+                ->where('p.id', 'ilike', "%{$term}%")
+                ->where('p.nome', 'ilike', "%{$term}%", 'or');
         }
         $product = $query
             ->order($orderField, $orderType)
@@ -116,17 +133,19 @@ class Produto extends Base
                 $value['id_produto'],
                 $value['nome'],
                 $value['estoque_atual'],
-                "<div class='d-flex gap-2'>
-                    <a href='/produto/alterar/{$value['id_produto']}' class='btn btn-warning'>
+                "
+                <div class='d-flex gap-2'>
+                    <a href='/produto/alterar/{$value['id_produto']}' class='btn btn-warning btn-sm px-2 shadow-sm' style='white-space: nowrap; font-weight: 500;'>
                         <i class='bi bi-pencil-square'></i> Alterar
                     </a>
-                    <button type='button' onclick='AjustarEstoque({$value['id_produto']});' class='btn btn-info'>
-                        <i class='bi bi-trash-fill'></i> Estoque
-                    </button>
-                    <button type='button' onclick='Delete({$value['id_produto']});' class='btn btn-danger'>
+                    <button type='button' onclick='Delete({$value['id_produto']});' class='btn btn-danger btn-sm px-2 shadow-sm' style='white-space: nowrap; font-weight: 500;'>
                         <i class='bi bi-trash-fill'></i> Excluir
                     </button>
-                </div>"
+                    <button type='button' onclick='AjustarEstoque({$value['id_produto']});' class='btn btn-info btn-sm px-2 shadow-sm' style='white-space: nowrap; font-weight: 500;'>
+                        <i class='bi bi-plus-circle-fill'></i> Ajustar Estoque
+                    </button>
+                </div>
+                "
             ];
         }
         $data = [
@@ -135,13 +154,7 @@ class Produto extends Base
             'recordsFiltered' => count($product),
             'data' => $produtoData
         ];
-        $payload = json_encode($data);
-
-        $response->getBody()->write($payload);
-
-        return $response
-            ->withHeader('Content-Type', 'application/json')
-            ->withStatus(200);
+        return $this->SendJson($response, $data);
     }
     public function alterar($request, $response, $args)
     {
@@ -192,7 +205,7 @@ class Produto extends Base
             $FieldAndValues = [
                 'nome' => $form['nome'],
                 'descricao_curta' => $form['descricao_curta'],
-                'valor' => $form['valor']
+                'valor' => (float) str_replace(',', '.', $form['valor'])
             ];
             $IsUpdate = UpdateQuery::table('product')->set($FieldAndValues)->where('id', '=', $id)->update();
             if (!$IsUpdate) {
@@ -205,41 +218,90 @@ class Produto extends Base
     }
     public function selecionarestoque($request, $response)
     {
+        $form = $request->getParsedBody();
+        $id = $form['id'] ?? null;
+
+        if (!$id) {
+            return $this->SendJson($response, ['status' => false, 'msg' => 'ID do produto não informado']);
+        }
+
+        $product = SelectQuery::select()
+            ->from('mvw_estoque')
+            ->where('id_produto', '=', $id)
+            ->fetch();
+
+        if (!$product) {
+            return $this->SendJson($response, ['status' => false, 'msg' => 'Produto não encontrado']);
+        }
+
+        return $this->SendJson($response, ['status' => true, 'estoque_atual' => $product['estoque_atual']]);
+    }
+    public function alterarestoque($request, $response)
+    {
         try {
+
             $form = $request->getParsedBody();
-            $id = $form['id'];
-            $product = SelectQuery::select('estoque_atual')->from('mvw_estoque')->where('id_produto', '=', $id)->fetch();
-            $estoqueAtual = $product['estoque_atual'] ?? 0;
-            if (!isset($form['nova_quantidade']) || $form['nova_quantidade'] === '') {
+            $id = $form['id'] ?? null;
+            $novaQuantidade = isset($form['nova_quantidade']) ? (int)$form['nova_quantidade'] : null;
+
+            if (!$id || $novaQuantidade === null) {
                 return $this->SendJson($response, [
-                    'status' => true,
-                    'estoque_atual' => $estoqueAtual
+                    'status' => false,
+                    'msg' => 'ID do produto ou nova quantidade não informados'
                 ]);
             }
-            $novoEstoqueDesejado = (float)$form['nova_quantidade'];
-            $estoqueAtualNumerico = (float)$estoqueAtual;
-            $quantidadeAjuste = $novoEstoqueDesejado - $estoqueAtualNumerico;
-            if ($quantidadeAjuste == 0) {
-                return $this->SendJson($response, ['status' => true, 'msg' => 'O estoque já é este valor.']);
+
+            // pega estoque atual
+            $produto = SelectQuery::select()
+                ->from('mvw_estoque')
+                ->where('id_produto', '=', $id)
+                ->fetch();
+
+            $estoqueAtual = $produto['estoque_atual'] ?? 0;
+
+            // se for igual, não faz nada
+            if ($novaQuantidade == $estoqueAtual) {
+                return $this->SendJson($response, [
+                    'status' => true,
+                    'msg' => 'Nenhuma alteração no estoque'
+                ]);
             }
-            $FieldsAndValues = [
-                'id_produto'         => $id,
-                'quantidade_entrada' => ($quantidadeAjuste > 0) ? $quantidadeAjuste : 0,
-                'quantidade_saida'   => ($quantidadeAjuste < 0) ? abs($quantidadeAjuste) : 0,
-                'observacao'         => 'AJUSTE MANUAL',
-                'tipo'               => ($quantidadeAjuste > 0) ? 'ENTRADA' : 'SAIDA',
-                'origem_movimento'   => 'COMPRA'
+
+            $entrada = 0;
+            $saida = 0;
+
+
+            if ($novaQuantidade > $estoqueAtual) {
+                $entrada = $novaQuantidade - $estoqueAtual;
+            } else {
+                $saida = $estoqueAtual - $novaQuantidade;
+            }
+
+            $FieldAndValues = [
+                'id_produto' => $id,
+                'quantidade_entrada' => $entrada,
+                'quantidade_saida' => $saida
             ];
-            $IsSave = InsertQuery::table('stock_movement')->save($FieldsAndValues);
+
+            $IsSave = InsertQuery::table('stock_movement')->save($FieldAndValues);
+
             if (!$IsSave) {
-                return $this->SendJson($response, ['status' => false, 'msg' => 'Erro ao salvar ajuste.'], 403);
+                return $this->SendJson($response, [
+                    'status' => false,
+                    'msg' => 'Erro ao registrar movimentação de estoque'
+                ]);
             }
+
             return $this->SendJson($response, [
                 'status' => true,
-                'msg' => "Estoque ajustado! Movimentação de " . abs($quantidadeAjuste) . " unidades."
+                'msg' => 'Estoque atualizado com sucesso!'
             ]);
         } catch (\Exception $e) {
-            return $this->SendJson($response, ['status' => false, 'msg' => $e->getMessage()], 500);
+
+            return $this->SendJson($response, [
+                'status' => false,
+                'msg' => 'Erro: ' . $e->getMessage()
+            ]);
         }
     }
 }

@@ -10,12 +10,27 @@ class AdjustmentStock extends Base
     public function lista($request, $response)
     {
         $dadosTemplate = [
-            'titulo' => 'Lista de Estoque'
+            'titulo' => 'Lista de Produtos'
         ];
         return $this->getTwig()
             ->render($response, $this->setView('listadjustmentstock'), $dadosTemplate)
             ->withHeader('Content-Type', 'text/html')
             ->withStatus(200);
+    }
+    public function cadastro($request, $response)
+    {
+        try {
+            $dadosTemplate = [
+                'acao' => 'c',
+                'titulo' => 'Cadastro'
+            ];
+            return $this->getTwig()
+                ->render($response, $this->setView('adjustmentstock'), $dadosTemplate)
+                ->withHeader('Content-Type', 'text/html')
+                ->withStatus(200);
+        } catch (\Exception $e) {
+            var_dump($e);
+        }
     }
     public function listajusteestoque($request, $response)
     {
@@ -32,42 +47,60 @@ class AdjustmentStock extends Base
         $fields = [
             0 => 'id',
             1 => 'nome',
-            2 => 'quantidade',
-            3 => 'total_bruto',
+            3 => 'descricao_curta',
+            2 => 'codigo_barra',
+            4 => 'valor',
         ];
         #Capturamos o nome do campo a ser odernado.
         $orderField = $fields[$order];
         #O termo pesquisado
         $term = $form['search']['value'];
-        $query = SelectQuery::select()->from('item_purchase');
+        $query = SelectQuery::select()->from('view_product');
         if (!is_null($term) && ($term !== '')) {
             $query
                 ->where('id', 'ilike', "%{$term}%")
                 ->where('nome', 'ilike', "%{$term}%", 'or')
-                ->where('quantidade', 'ilike', "%{$term}%", 'or')
-                ->where('total_bruto    ', 'ilike', "%{$term}%", 'or');        
+                ->where('descricao_curta', 'ilike', "%{$term}%", 'or')
+                ->where('codigo_barra', 'ilike', "%{$term}%", 'or')
+                ->where('valor', 'ilike', "%{$term}%", 'or');        
         }
-        $estoque = $query
+        $product = $query
             ->order($orderField, $orderType)
             ->limit($length, $start)
             ->fetchAll();
         $produtoData = [];
-        foreach ($estoque as $key => $value) {
+        foreach ($product as $key => $value) {
             $produtoData[$key] = [
                 $value['id'],
                 $value['nome'],
-                $value['quantidade'],
-                $value['total_bruto'],
+                $value['descricao_curta'],
+                $value['codigo_barra'],
+                $value['valor'],
                 "<div class='d-flex gap-2'>
-                    <button type='button' class='btn btn-primary btn-sm px-2 shadow-sm' style='white-space: nowrap; font-weight: 500;' data-bs-toggle='modal' data-bs-target='#modalstock'>
-                        <i class='bi bi-plus-circle'></i> Ajustar
-                    </button>"
+                    <button type='button' onclick='AjustarEstoque({$value['id']});' class='btn btn-info btn-sm px-2 shadow-sm' style='white-space: nowrap; font-weight: 500;'>
+                        <i class='bi bi-plus-circle-fill'></i> Ajustar Estoque
+                    </button>
+
+                    <button type='button' onclick='Delete({$value['id']});' class='btn btn-danger btn-sm px-2 shadow-sm' style='white-space: nowrap; font-weight: 500;'>
+                        <i class='bi bi-trash-fill'></i> Excluir
+                    </button>
+                </div>"
                 ];
                 }
+                
+                
+                
+            //<div class='d-flex gap-2'>
+            // <a href='/produto/alterar/{$value['id']}' class='btn btn-warning btn-sm px-2 shadow-sm' style='white-space: nowrap; font-weight: 500;'>
+            //   <i class='bi bi-pencil-square'></i> Alterar
+            // </a>
+
+
+
                 $data = [
             'status' => true,
-            'recordsTotal' => count($estoque),
-            'recordsFiltered' => count($estoque),
+            'recordsTotal' => count($product),
+            'recordsFiltered' => count($product),
             'data' => $produtoData
         ];
         $payload = json_encode($data);

@@ -21,7 +21,7 @@ const tabela = new $('#tabela').DataTable({
     },
     columnDefs: [
         {
-            targets: [3],
+            targets: [4],
             render: function (data, type, row) {
                 if (type === 'display') {
                     return parseFloat(data).toLocaleString('pt-BR', {
@@ -65,4 +65,58 @@ async function Delete(id) {
     });
     tabela.ajax.reload();
 }
-window.Delete = Delete;     
+
+async function AjustarEstoque(id) {
+    console.log(`AjustarEstoque - ID: ${id}`);
+    document.getElementById('id').value = id;
+
+    const response = await Requests
+        .SetForm('form')
+        .Post('/produto/selecionarestoque');
+
+    if (!response.status) {
+        Swal.fire({
+            title: "Produto não encontrado!",
+            icon: "error",
+            html: response.msg,
+            timer: 3000,
+            timerProgressBar: true
+        });
+        return;
+    }
+
+    document.getElementById('quantidade_atual').value = response.estoque_atual;
+    $('#modalstock').modal('show');
+    document.getElementById('nova_quantidade').focus();
+}
+
+async function SalvarEstoque() {
+    console.log("SalvarEstoque chamado");
+
+    const response = await Requests.SetForm('form').Post('/produto/alterarestoque');
+
+    if (!response.status) {
+        Swal.fire({
+            title: "Erro ao atualizar estoque!",
+            icon: "error",
+            html: response.msg,
+            timer: 3000,
+            timerProgressBar: true
+        });
+        return;
+    }
+
+    Swal.fire({
+        title: "Estoque atualizado!",
+        icon: "success",
+        timer: 2000,
+        timerProgressBar: true
+    });
+
+    $('#modalstock').modal('hide');
+    tabela.ajax.reload();
+}
+
+window.Delete = Delete;
+window.AjustarEstoque = AjustarEstoque;
+window.SalvarEstoque = SalvarEstoque;     

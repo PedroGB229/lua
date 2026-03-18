@@ -18,12 +18,25 @@ const tabela = new $('#tabela').DataTable({
     ajax: {
         url: '/produto/listproduto',
         type: 'POST'
+    },
+});
+
+// --- LÓGICA DE ATALHOS ---
+document.addEventListener('keydown', function (e) {
+    
+    // F2 - Ir para Cadastro
+    if (e.key === 'F2') {
+        e.preventDefault();
+        window.location.href = '/produto/cadastro';
     }
 });
 
 async function Delete(id) {
+
     document.getElementById('id').value = id;
+
     const response = await Requests.SetForm('form').Post('/produto/delete');
+
     if (!response.status) {
         Swal.fire({
             title: "Erro ao remover!",
@@ -34,56 +47,66 @@ async function Delete(id) {
         });
         return;
     }
+
     Swal.fire({
-        title: "Removido com sucesso!",
-        icon: "success",
-        html: response.msg,
-        timer: 3000,
-        timerProgressBar: true
+        title: "Removido!",
+        icon: "success"
     });
+
     tabela.ajax.reload();
 }
 
 async function AjustarEstoque(id) {
-    try {
-        console.log(`Abrindo modal para ID: ${id}`);
-        document.getElementById('id').value = id;
-        document.getElementById('nova_quantidade').value = '';
-        document.getElementById('quantidade_atual').value = 'Carregando...';
-        const response = await Requests.SetForm('form').Post('/produto/selecionarestoque');
+    console.log(`AjustarEstoque - ID: ${id}`);
+    document.getElementById('id').value = id;
 
-        if (response && response.status) {
-            document.getElementById('quantidade_atual').value = response.estoque_atual;
+    const response = await Requests
+        .SetForm('form')
+        .Post('/produto/selecionarestoque');
 
-            $('#modalstock').modal('show');
-        } else {
-            console.error("Erro na resposta do servidor:", response);
-            Swal.fire("Erro", "Produto não encontrado ou sem saldo.", "error");
-        }
-    } catch (error) {
-        console.error("Erro ao abrir modal:", error);
-    }
-}
-
-async function NovaQuantidade() {
-    const response = await Requests.SetForm('form').Post('/produto/selecionarestoque');
-
-    if (response.status) {
+    if (!response.status) {
         Swal.fire({
-            title: "Sucesso!",
-            text: response.msg,
-            icon: "success",
-            timer: 2000
+            title: "Produto nao encontrado!",
+            icon: "error",
+            html: response.msg,
+            timer: 3000,
+            timerProgressBar: true
         });
-
-        $('#modalstock').modal('hide');
-        tabela.ajax.reload();
-    } else {
-        Swal.fire("Erro", response.msg, "error");
+        return;
     }
+    document.getElementById('quantidade_atual').value = response.estoque_atual;
+
+    $('#modalstock').modal('show');
+    document.getElementById('nova_quantidade').focus();
 }
 
-// IMPORTANTE: Expor para o window porque o DataTables renderiza o HTML dinamicamente
+async function SalvarEstoque() {
+    console.log("salvar estoque chamado");
+    const response = await Requests.SetForm('form').Post('/produto/alterarestoque');
+
+    if (!response.status) {
+        Swal.fire({
+            title: "Erro ao atualizar estoque!",
+            icon: "error",
+            html: response.msg,
+            timer: 3000,
+            timerProgressBar: true
+        });
+        return;
+    }
+
+    Swal.fire({
+        title: "Estoque atualizado!",
+        icon: "success",
+        timer: 2000,
+        timerProgressBar: true
+    });
+
+    $('#modalstock').modal('hide');
+    tabela.ajax.reload(); // atualiza a tabela para refletir mudança
+}
+
 window.AjustarEstoque = AjustarEstoque;
-window.NovaQuantidade = NovaQuantidade;
+
+window.SalvarEstoque = SalvarEstoque;
 window.Delete = Delete;
